@@ -88,6 +88,8 @@ stop_reason=end_turn
 }
 ```
 
+<br><br>
+
 INSTALLATION : 
 Requires Python 3.10 or higher.
 
@@ -106,8 +108,9 @@ Requires Python 3.10 or higher.
    Get a key at: https://console.anthropic.com/settings/keys
    Your .env file is listed in .gitignore and will never be committed.
 
+<br><br>
 
-USAGE
+USAGE :
 
 Feel free to change syllabus.txt with any text file but you might want to change the prompts in the source code too- keep an eye on that. As a good example, you can test how the algorithm will behave given syllabus.txt with following constraints however you desire : 
 
@@ -126,7 +129,8 @@ Limit how much of a long document is sent (default cap is 50,000 characters):
 The extracted JSON is printed to stdout. You can redirect it to a file:
    python demo_extract.py --file syllabus.txt > output.json
 
-
+<br><br>
+   
 OUTPUT : 
 
 Given a syllabus (which is hard coded to the project) the tool always returns a JSON object with these fields : 
@@ -138,12 +142,15 @@ Given a syllabus (which is hard coded to the project) the tool always returns a 
    
 Doing what with this JSON file is totally up to you.
 
+<br><br>
    
-Environment variables
+ENVIRONMENT VARIABLES :  
+
    ANTHROPIC_API_KEY   Required. Your Anthropic API key. Read from .env or set directly in your shell.
 
+<br><br>
 
-Roadmap
+Roadmap :
    - Accept PDF files directly as input using a PDF-to-text conversion step
    - Add a simple web interface so users can paste or upload a syllabus in a browser
    - Wrap the extractor in a FastAPI endpoint for use as a microservice
