@@ -1,11 +1,12 @@
 from __future__ import annotations
 import argparse
+import base64
 import datetime
 import functools
 import json
 import os
 import sys
-from typing import Any, Final
+from typing import Any, Final, TypeAlias
 
 from anthropic import Anthropic
 from anthropic.types import Message
@@ -21,7 +22,17 @@ MODEL_ID: Final[str] = "claude-haiku-4-5-20251001"
 
 DEFAULT_MAX_CHARS: Final[int] = 50_000
 MAX_OUTPUT_TOKENS: Final[int] = 4096
+MAX_BINARY_BYTES: Final[int] = 32 * 1024 * 1024
 TOOL_NAME: Final[str] = "submit_syllabus_extraction"
+
+ContentBlock: TypeAlias = dict[str, Any]
+
+_EXT_MAP: Final[dict[str, tuple[str, str]]] = {
+    ".pdf": ("document", "application/pdf"),
+    ".jpg": ("image", "image/jpeg"),
+    ".jpeg": ("image", "image/jpeg"),
+    ".png": ("image", "image/png"),
+}
 
 class GradingWeight(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -115,7 +126,7 @@ def _build_user_content(doc_blocks: list[ContentBlock]) -> list[ContentBlock]:
         "type": "text",
         "text": (
             "Extract all syllabus fields from the document above. "
-            "Call the extract_syllabus tool with the structured data."
+            f"Call the {TOOL_NAME} tool with the structured data."
         ),
     }
     return doc_blocks + [instruction]
@@ -143,7 +154,13 @@ def _parse_tool_use(message: Message) -> SyllabusExtraction:
 # single API call; model returns structured data via tool_use
 def extract_syllabus(doc_blocks: list[ContentBlock], *, client: Anthropic, debug: bool) -> SyllabusExtraction:
     messages: list[dict[str, Any]] = [{"role": "user", "content": _build_user_content(doc_blocks)}]
-    return _call_model(client, messages=messages, debug=debug)
+    response = _call_model(client, messages=messages, debug=debug)
+    try:
+        return _parse_tool_use(response)
+    except ValidationError as exc:
+        raise RuntimeError(
+            "Tool input did not pass Pydantic validation."
+        ) from exc
 
 # return content blocks representing the user's document
 def _read_input(args: argparse.Namespace, *, debug: bool) -> list[ContentBlock]:
