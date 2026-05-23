@@ -180,17 +180,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Extract syllabus-oriented JSON from text using Anthropic Messages API.",
     )
     p.add_argument(
-        "--file",
-        "-f",
+        "--file", "-f",
         metavar="PATH",
-        help="Read syllabus text from this UTF-8 file (default: stdin)",
+        help="Syllabus file — .txt (default: stdin), .pdf, .jpg, or .png",
     )
     p.add_argument(
         "--max-chars",
         type=int,
         default=DEFAULT_MAX_CHARS,
         metavar="N",
-        help=f"Maximum characters of input to send (default: {DEFAULT_MAX_CHARS})",
+        help=f"max characters for text input (default: {DEFAULT_MAX_CHARS}). No effect on PDF/image.",
     )
     p.add_argument(
         "--debug",
@@ -201,30 +200,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    load_dotenv()  # no-op if .env absent or python-dotenv not installed
+    load_dotenv()
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key or not str(api_key).strip():
-        print(
-            "error: ANTHROPIC_API_KEY is not set or is empty. "
-            "Set it in your environment (do not commit secrets).",
-            file=sys.stderr,
-        )
+        print("error: ANTHROPIC_API_KEY is not set.", file=sys.stderr)
         return 2
-
     try:
-        text = _read_input_text(args)
-    except OSError as e:
+        blocks = _read_input(args, debug=args.debug)
+    except (OSError, ValueError) as e:
         print(f"error: could not read input: {e}", file=sys.stderr)
         return 2
-
-    text = _truncate(text, args.max_chars, debug=args.debug)
-    if not text.strip():
+    blocks = _truncate_content(blocks, args.max_chars, debug=args.debug)
+    # Guard against empty text input (binary blocks are never empty)
+    if all(b.get("type") == "text" and not b["text"].strip() for b in blocks):
         print("error: input is empty after trimming.", file=sys.stderr)
         return 2
 
     client = Anthropic(api_key=api_key)
     try:
-        result = extract_syllabus(text, client=client, debug=args.debug)
+        result = extract_syllabus(blocks, client=client, debug=args.debug)
     except Exception as e:
         print(f"error: extraction failed: {e}", file=sys.stderr)
         return 1
