@@ -6,6 +6,7 @@
 - pdfplumber
 - Fast API
 - python-dotenv
+- icalendar
   
 <br><br>
 
@@ -64,6 +65,9 @@ Limit characters sent for long documents (default: 50,000)
 
 Write output directly to a file
 - python demo_extract.py --file syllabus.pdf > output.json
+
+Export important dates to an iCalendar file (confirmation goes to stderr; JSON stays on stdout)
+- python demo_extract.py --file syllabus.txt --export-calendar out.ics
 
 B) REST API
 
