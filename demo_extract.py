@@ -11,6 +11,7 @@ import asyncio
 from anthropic import Anthropic
 from anthropic.types import Message
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from icalendar import Calendar, Event
 
 try:
     from dotenv import load_dotenv
@@ -334,12 +335,43 @@ async def run_analysis(
     client: Anthropic,
     debug: bool,
 ) -> tuple[ValidationResult, PolicyFlagResult]:
-    """Run validation and policy flagging concurrently."""
     validation, policy = await asyncio.gather(
         validate_extraction(extraction, client=client, debug=debug),
         flag_policies(extraction, client=client, debug=debug),
     )
     return validation, policy
+
+# Convert a list of ImportantDate objects into an icalendar Calendar
+def build_calendar(
+    dates: list[ImportantDate],
+    course_code: str | None,
+) -> Calendar:
+    cal = Calendar()
+    cal.add("prodid", "-//Syllabus Parser//EN")
+    cal.add("version", "2.0")
+    cal.add("calscale", "GREGORIAN")
+    cal.add("x-wr-calname", course_code or "Syllabus")
+
+    for item in dates:
+        if not item.date_iso:
+            continue
+
+        start = datetime.date.fromisoformat(item.date_iso)
+        event = Event()
+        event.add("summary", item.label)
+        event.add("dtstart", start)
+        # All-day events use an exclusive end date (day after start), per RFC 5545.
+        event.add("dtend", start + datetime.timedelta(days=1))
+        event.add("description", item.raw_text or item.label)
+        cal.add_component(event)
+
+    return cal
+
+# serialise a Calendar object and write it to a .ics file.
+def write_calendar(cal: Calendar, path: str) -> None:
+    with open(path, "wb") as f:
+        f.write(cal.to_ical())
+    print(f"Calendar written to {path}", file=sys.stderr)
 
 # return content blocks representing the user's document
 def _read_input(args: argparse.Namespace, *, debug: bool) -> list[ContentBlock]:
@@ -392,6 +424,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Print minimal diagnostics to stderr (never prints full user document or model JSON).",
     )
+    p.add_argument(
+        "--export-calendar",
+        metavar="PATH",
+        default=None,
+        help="Write extracted dates to an .ics iCalendar file at this path.",
+    )
     return p.parse_args(argv)
 
 def main(argv: list[str] | None = None) -> int:
@@ -431,6 +469,15 @@ def main(argv: list[str] | None = None) -> int:
         "policy_flags" : policy.model_dump(mode="json"),
     }
     print(json.dumps(output, indent=2, ensure_ascii=False))
+
+    if args.export_calendar:
+        if not any(d.date_iso for d in result.important_dates):
+            print(
+                "warning: no dates with ISO values found; calendar will be empty",
+                file=sys.stderr,
+            )
+        cal = build_calendar(result.important_dates, result.course_code)
+        write_calendar(cal, args.export_calendar)
     return 0
 
 if __name__ == "__main__":
