@@ -131,6 +131,18 @@ def _build_tool() -> dict[str, Any]:
         "input_schema": SyllabusExtraction.model_json_schema(),
     }
 
+@functions.lru_cache(maxsize = 1)
+def _build_validation_tool() -> dict[str, Any]:
+    schema = ValidationResult.model_json_schema()
+    return {
+        "name" : "report_validation",
+        "description" : (
+            "Report logial consistency issues found in extracted syllabus data."
+            "Always call this tool even if no warnings are found."
+        ),
+        "input_schema" : schema,
+    }
+
 @functools.lru_cache(maxsize=1)
 def _build_system_prompt() -> str:
     return (
