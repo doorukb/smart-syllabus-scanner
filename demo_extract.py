@@ -75,6 +75,25 @@ class SyllabusExtraction(BaseModel):
     important_dates: list[ImportantDate] = Field(default_factory=list)
     policy_bullets: list[str] = Field(default_factory=list)
 
+class ValidationWarning(BaseModel):
+    model_config = ConfigDict(extra = 'forbid')
+    field: str = Field(..., description="Which field the warning relates to, e.g. 'grading_weights")
+    message: str = Field(..., description = "Plain-English description of the issue found")
+    severity : str = Field(..., description = "'low', 'medium', or 'high'")
+
+class ValidationResult(BaseModel) :
+    model_config = ConfigDict(extra = 'forbid')
+    warnings: list[ValidationWarning] = Field(default_factory=list)
+    grading_sums_to_100 : bool = Field(..., description = "True if grading weights sum to 100%")
+    grading_total : float = Field(..., description = "Actual sum of grading weights")
+    date_summary: str | None = Field(default=None, description="Summary of important dates if present")
+    policy_summary: str | None = Field(default=None, description="Summary of policies if present")
+    course_summary: str | None = Field(default=None, description="Summary of course if present")
+    instructor_summary: str | None = Field(default=None, description="Summary of instructor if present")
+    course_code_summary: str | None = Field(default=None, description="Summary of course code if present")
+    instructor_email_summary: str | None = Field(default=None, description="Summary of instructor email if present")
+    grading_weights_summary: str | None = Field(default=None, description="Summary of grading weights if present")
+
 def _debug_stderr(debug: bool, message: str) -> None:
     if debug:
         print(message, file=sys.stderr)
