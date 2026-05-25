@@ -154,6 +154,18 @@ def _build_validation_tool() -> dict[str, Any]:
     }
 
 @functools.lru_cache(maxsize=1)
+def _build_policy_tool() -> dict[str, object]:
+    schema = PolicyFlagResult.model_json_schema()
+    return {
+        "name": "report_policy_flags",
+        "description": (
+            "Report student-friendliness ratings for each policy in a syllabus. "
+            "Always call this tool even if all policies are low severity."
+        ),
+        "input_schema": schema,
+    }
+
+@functools.lru_cache(maxsize=1)
 def _build_system_prompt() -> str:
     return (
         "You extract syllabus information into structured data. "
@@ -249,6 +261,59 @@ def validate_extraction(
                 ) from exc
     raise RuntimeError(
         f"Validation call did not return a {VALIDATION_TOOL_NAME!r} tool_use block. "
+        f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
+    )
+
+# the third chained call to score each policy bullet for hashness.
+# Anthropic SDK is synchronous, and client.messages.create() is a blocking call.
+# we will use loop.run_in_executor to run the call asynchronously because asyncio is not enough
+# None argument means to use the default thread pool executor.
+async def flag_policies(
+    extraction: SyllabusExtraction,
+    *,
+    client: Anthropic,
+    debug: bool,
+) -> PolicyFlagResult:
+    if not extraction.policy_bullets:
+        return PolicyFlagResult(flags=[], overall_severity="low")
+
+    bullets = "\n".join(f"- {p}" for p in extraction.policy_bullets)
+
+    system = (
+        "You are a student-advocate syllabus reviewer. "
+        "Rate each policy for how strict or punishing it is from a student's perspective. "
+        "Always call the report_policy_flags tool."
+    )
+    user_content = (
+        "Rate each of these syllabus policies for student-friendliness:\n\n"
+        f"{bullets}\n\n"
+        "Severity guide:\n"
+        "  low    — standard, reasonable, no cause for concern\n"
+        "  medium — notably strict, students should be aware\n"
+        "  high   — unusually punishing or restrictive\n\n"
+        "Set overall_severity to the highest severity level found across all policies."
+    )
+
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda: client.messages.create(
+            model=MODEL_ID,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=system,
+            tools=[_build_policy_tool()],
+            tool_choice={"type": "tool", "name": "report_policy_flags"},
+            messages=[{"role": "user", "content": user_content}],
+        ),
+    )
+    _debug_stderr(debug, f"policy stop_reason={response.stop_reason}")
+
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "report_policy_flags":
+            return PolicyFlagResult.model_validate(block.input)
+
+    raise RuntimeError(
+        "Policy flagging call did not return a report_policy_flags tool_use block. "
         f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
     )
 
