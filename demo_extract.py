@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from typing import Any, Final, TypeAlias
-
+import asyncio
 from anthropic import Anthropic
 from anthropic.types import Message
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -89,6 +89,20 @@ class ValidationResult(BaseModel):
     grading_sums_to_100: bool = Field(..., description="True if grading weights sum to 100%")
     grading_total: float = Field(..., description="Actual sum of grading weights")
 
+class PolicyFlag(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    policy: str = Field(..., description="The original policy text being evaluated")
+    severity: str = Field(..., description="'low', 'medium', or 'high'")
+    reason: str = Field(..., description="Plain-English explanation of the severity rating")
+
+class PolicyFlagResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    flags: list[PolicyFlag] = Field(default_factory=list)
+    overall_severity: str = Field(
+        ...,
+        description="Highest severity level across all policies: 'low', 'medium', or 'high'"
+    )
+
 def _debug_stderr(debug: bool, message: str) -> None:
     if debug:
         print(message, file=sys.stderr)
@@ -137,6 +151,18 @@ def _build_validation_tool() -> dict[str, Any]:
             "Always call this tool even if no warnings are found."
         ),
         "input_schema": ValidationResult.model_json_schema(),
+    }
+
+@functools.lru_cache(maxsize=1)
+def _build_policy_tool() -> dict[str, object]:
+    schema = PolicyFlagResult.model_json_schema()
+    return {
+        "name": "report_policy_flags",
+        "description": (
+            "Report student-friendliness ratings for each policy in a syllabus. "
+            "Always call this tool even if all policies are low severity."
+        ),
+        "input_schema": schema,
     }
 
 @functools.lru_cache(maxsize=1)
@@ -197,7 +223,7 @@ def _build_validation_system_prompt() -> str:
     )
 
 # Second chained call: checks extracted data for logical inconsistencies.
-def validate_extraction(
+async def validate_extraction(
     extraction: SyllabusExtraction,
     *,
     client: Anthropic,
@@ -215,13 +241,17 @@ def validate_extraction(
         "Add a warning for each issue found.\n"
         f"Report your findings via the {VALIDATION_TOOL_NAME} tool."
     )
-    response = client.messages.create(
-        model=MODEL_ID,
-        max_tokens=MAX_OUTPUT_TOKENS,
-        system=_build_validation_system_prompt(),
-        tools=[_build_validation_tool()],
-        tool_choice={"type": "tool", "name": VALIDATION_TOOL_NAME},
-        messages=[{"role": "user", "content": user_content}],
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda: client.messages.create(
+            model=MODEL_ID,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=_build_validation_system_prompt(),
+            tools=[_build_validation_tool()],
+            tool_choice={"type": "tool", "name": VALIDATION_TOOL_NAME},
+            messages=[{"role": "user", "content": user_content}],
+        ),
     )
     _debug_stderr(debug, f"validation stop_reason={response.stop_reason}")
 
@@ -237,6 +267,79 @@ def validate_extraction(
         f"Validation call did not return a {VALIDATION_TOOL_NAME!r} tool_use block. "
         f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
     )
+
+# the third chained call to score each policy bullet for hashness.
+# Anthropic SDK is synchronous, and client.messages.create() is a blocking call.
+# we will use loop.run_in_executor to run the call asynchronously because asyncio is not enough
+# None argument means to use the default thread pool executor.
+async def flag_policies(
+    extraction: SyllabusExtraction,
+    *,
+    client: Anthropic,
+    debug: bool,
+) -> PolicyFlagResult:
+    if not extraction.policy_bullets:
+        return PolicyFlagResult(flags=[], overall_severity="low")
+
+    bullets = "\n".join(f"- {p}" for p in extraction.policy_bullets)
+
+    system = (
+        "You are a student-advocate syllabus reviewer. "
+        "Rate each policy for how strict or punishing it is from a student's perspective. "
+        "Always call the report_policy_flags tool."
+    )
+    user_content = (
+        "Rate each of these syllabus policies for student-friendliness:\n\n"
+        f"{bullets}\n\n"
+        "Consider late-penalty severity, attendance strictness, accommodation "
+        "flexibility, and academic-dishonesty consequences when assigning severity.\n\n"
+        "Severity guide:\n"
+        "  low    — standard, reasonable, no cause for concern\n"
+        "  medium — notably strict, students should be aware\n"
+        "  high   — unusually punishing or restrictive\n\n"
+        "Return one flag per policy with a short reason. "
+        "Set overall_severity to the highest severity level found across all policies."
+    )
+
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda: client.messages.create(
+            model=MODEL_ID,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=system,
+            tools=[_build_policy_tool()],
+            tool_choice={"type": "tool", "name": "report_policy_flags"},
+            messages=[{"role": "user", "content": user_content}],
+        ),
+    )
+    _debug_stderr(debug, f"policy stop_reason={response.stop_reason}")
+
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "report_policy_flags":
+            return PolicyFlagResult.model_validate(block.input)
+
+    raise RuntimeError(
+        "Policy flagging call did not return a report_policy_flags tool_use block. "
+        f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
+    )
+
+# run validation and policy flagging concurrently.
+# I decided to use asyncio.gather to run the two calls concurrently because it
+# takes any number of awaitables and runs them concurrently, returning all results 
+# once every one of them finishes. Both API calls are now concurrent
+async def run_analysis(
+    extraction: SyllabusExtraction,
+    *,
+    client: Anthropic,
+    debug: bool,
+) -> tuple[ValidationResult, PolicyFlagResult]:
+    """Run validation and policy flagging concurrently."""
+    validation, policy = await asyncio.gather(
+        validate_extraction(extraction, client=client, debug=debug),
+        flag_policies(extraction, client=client, debug=debug),
+    )
+    return validation, policy
 
 # return content blocks representing the user's document
 def _read_input(args: argparse.Namespace, *, debug: bool) -> list[ContentBlock]:
@@ -316,13 +419,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: extraction failed: {e}", file=sys.stderr)
         return 1
     try:
-        validation = validate_extraction(result, client=client, debug=args.debug)
+        validation, policy = asyncio.run(
+            run_analysis(result, client = client, debug = args.debug),
+        )
     except Exception as e:
-        print(f"error: validation failed: {e}", file=sys.stderr)
+        print(f"error: analysis failed: {e}", file=sys.stderr)
         return 1
     output = {
         "extraction": result.model_dump(mode="json"),
         "validation": validation.model_dump(mode="json"),
+        "policy_flags" : policy.model_dump(mode="json"),
     }
     print(json.dumps(output, indent=2, ensure_ascii=False))
     return 0
