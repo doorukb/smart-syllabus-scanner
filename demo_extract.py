@@ -76,23 +76,18 @@ class SyllabusExtraction(BaseModel):
     policy_bullets: list[str] = Field(default_factory=list)
 
 class ValidationWarning(BaseModel):
-    model_config = ConfigDict(extra = 'forbid')
-    field: str = Field(..., description="Which field the warning relates to, e.g. 'grading_weights")
-    message: str = Field(..., description = "Plain-English description of the issue found")
-    severity : str = Field(..., description = "'low', 'medium', or 'high'")
+    model_config = ConfigDict(extra="forbid")
 
-class ValidationResult(BaseModel) :
-    model_config = ConfigDict(extra = 'forbid')
+    field: str = Field(..., description="Which field the warning relates to, e.g. grading_weights")
+    message: str = Field(..., description="Plain-English description of the issue found")
+    severity: str = Field(..., description="'low', 'medium', or 'high'")
+
+class ValidationResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     warnings: list[ValidationWarning] = Field(default_factory=list)
-    grading_sums_to_100 : bool = Field(..., description = "True if grading weights sum to 100%")
-    grading_total : float = Field(..., description = "Actual sum of grading weights")
-    date_summary: str | None = Field(default=None, description="Summary of important dates if present")
-    policy_summary: str | None = Field(default=None, description="Summary of policies if present")
-    course_summary: str | None = Field(default=None, description="Summary of course if present")
-    instructor_summary: str | None = Field(default=None, description="Summary of instructor if present")
-    course_code_summary: str | None = Field(default=None, description="Summary of course code if present")
-    instructor_email_summary: str | None = Field(default=None, description="Summary of instructor email if present")
-    grading_weights_summary: str | None = Field(default=None, description="Summary of grading weights if present")
+    grading_sums_to_100: bool = Field(..., description="True if grading weights sum to 100%")
+    grading_total: float = Field(..., description="Actual sum of grading weights")
 
 def _debug_stderr(debug: bool, message: str) -> None:
     if debug:
@@ -131,16 +126,17 @@ def _build_tool() -> dict[str, Any]:
         "input_schema": SyllabusExtraction.model_json_schema(),
     }
 
-@functions.lru_cache(maxsize = 1)
+VALIDATION_TOOL_NAME: Final[str] = "report_validation"
+
+@functools.lru_cache(maxsize=1)
 def _build_validation_tool() -> dict[str, Any]:
-    schema = ValidationResult.model_json_schema()
     return {
-        "name" : "report_validation",
-        "description" : (
-            "Report logial consistency issues found in extracted syllabus data."
+        "name": VALIDATION_TOOL_NAME,
+        "description": (
+            "Report logical consistency issues found in extracted syllabus data. "
             "Always call this tool even if no warnings are found."
         ),
-        "input_schema" : schema,
+        "input_schema": ValidationResult.model_json_schema(),
     }
 
 @functools.lru_cache(maxsize=1)
@@ -193,43 +189,52 @@ def extract_syllabus(doc_blocks: list[ContentBlock], *, client: Anthropic, debug
             "Tool input did not pass Pydantic validation."
         ) from exc
 
-# this is the second chained call, which checks the extracted data for logial inconsistencies and other contradictions
-def validate_extraction(
-    extraction : SyllabusExtraction,
-    *,
-    client : Anthropic,
-    debug : tool,
-) -> ValidationResult :
-    payload = json.dumps(extraction.model_dump(mode = "json"), indent = 2, ensure_ascii = False)
-    system = (
-        "You are a syllabus data validator"
-        "You will receive extracted syllabus data as JSON and must check it for logical issues."
-        "Alyways call the report_validation tool, even when no issues were found."
+def _build_validation_system_prompt() -> str:
+    return (
+        "You are a syllabus data validator. "
+        "You will receive extracted syllabus data as JSON and must check it for logical issues. "
+        f"Always call the {VALIDATION_TOOL_NAME} tool, even when no issues were found."
     )
+
+# Second chained call: checks extracted data for logical inconsistencies.
+def validate_extraction(
+    extraction: SyllabusExtraction,
+    *,
+    client: Anthropic,
+    debug: bool,
+) -> ValidationResult:
+    payload = json.dumps(extraction.model_dump(mode="json"), indent=2, ensure_ascii=False)
     user_content = (
         "Check this extracted syllabus data for logical inconsistencies:\n\n"
         f"{payload}\n\n"
         "Specifically:\n"
-        "1. Do the grading_weights percentages sum to 100? Flag it if not.\n"
+        "1. Do the grading_weights percentages sum to 100? Set grading_total to their sum "
+        "and grading_sums_to_100 accordingly. Add a warning if they do not sum to 100.\n"
         "2. Are any important_dates logically inconsistent with each other "
-        "(e.g. final before midterm, withdrawal deadline after final exam)?\n"
-        "Report all issues via the report_validation tool."
+        "(e.g. final before midterm, withdrawal deadline after final exam)? "
+        "Add a warning for each issue found.\n"
+        f"Report your findings via the {VALIDATION_TOOL_NAME} tool."
     )
     response = client.messages.create(
-        model = MODEL_ID,
-        max_tokens = MAX_OUTPUT_TOKENS,
-        system = system,
-        tools = [_build_validation_tool()],
-        tool_choice = {"type", "tool", "name", "report_validation"},
-        messages = [{role : "user", "content" : user_content}],
+        model=MODEL_ID,
+        max_tokens=MAX_OUTPUT_TOKENS,
+        system=_build_validation_system_prompt(),
+        tools=[_build_validation_tool()],
+        tool_choice={"type": "tool", "name": VALIDATION_TOOL_NAME},
+        messages=[{"role": "user", "content": user_content}],
     )
     _debug_stderr(debug, f"validation stop_reason={response.stop_reason}")
 
     for block in response.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == "report_validation" :
-            return ValidationResult.model_validate(block.input)
+        if getattr(block, "type", None) == "tool_use" and block.name == VALIDATION_TOOL_NAME:
+            try:
+                return ValidationResult.model_validate(block.input)
+            except ValidationError as exc:
+                raise RuntimeError(
+                    "Validation tool input did not pass Pydantic validation."
+                ) from exc
     raise RuntimeError(
-        "Validation call did not return a report_validation tool_use block. "
+        f"Validation call did not return a {VALIDATION_TOOL_NAME!r} tool_use block. "
         f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
     )
 
@@ -310,16 +315,16 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         print(f"error: extraction failed: {e}", file=sys.stderr)
         return 1
-    try : 
-        validation = validate_extraction(result, cleint = client, debug = args.debug)
+    try:
+        validation = validate_extraction(result, client=client, debug=args.debug)
     except Exception as e:
         print(f"error: validation failed: {e}", file=sys.stderr)
         return 1
     output = {
-        "extraction" : result.model_dump(mode = "json"),
-        "validation" : validation.model_dump(mode = "json"),
+        "extraction": result.model_dump(mode="json"),
+        "validation": validation.model_dump(mode="json"),
     }
-    print(json.dumps(output, indent = 2, ensure_ascii = False))
+    print(json.dumps(output, indent=2, ensure_ascii=False))
     return 0
 
 if __name__ == "__main__":
