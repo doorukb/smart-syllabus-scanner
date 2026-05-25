@@ -1,19 +1,20 @@
 from __future__ import annotations
-import os
-from dotenv import load_dotenv
-from anthropic import Anthropic
-from fastapi import FastAPI
+
 import base64
+import os
+
+from anthropic import Anthropic
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
+
+from api.models import ExtractionResponse, HealthResponse, InfoResponse
 from demo_extract import (
     ContentBlock,
     build_calendar,
     extract_syllabus,
     run_analysis,
 )
-from fastapi.responses import Response
-from api.models import ExtractionResponse, TextRequest
-from api.models import HealthResponse, InfoResponse
 
 load_dotenv()
 
@@ -65,16 +66,16 @@ async def extract(
 
     if file is not None:
         raw = await file.read()
-        content_type = file.content_type or ""
+        content_type = (file.content_type or "").lower()
+        ext = os.path.splitext(file.filename or "")[1].lower()
 
-        if "pdf" in content_type:
+        if "pdf" in content_type or ext == ".pdf":
             media_type, block_type = "application/pdf", "document"
-        elif "png" in content_type:
+        elif "png" in content_type or ext == ".png":
             media_type, block_type = "image/png", "image"
-        elif "jpeg" in content_type or "jpg" in content_type:
+        elif "jpeg" in content_type or "jpg" in content_type or ext in {".jpg", ".jpeg"}:
             media_type, block_type = "image/jpeg", "image"
         else:
-            # Treat as plain text
             blocks = [{"type": "text", "text": raw.decode("utf-8", errors="replace")}]
             media_type, block_type = None, None
 
@@ -93,13 +94,14 @@ async def extract(
     else:
         blocks = [{"type": "text", "text": text}]
 
-    client = _get_client()
-
     try:
+        client = _get_client()
         result = extract_syllabus(blocks, client=client, debug=False)
         validation, policy = await run_analysis(result, client=client, debug=False)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
     return ExtractionResponse(
         extraction=result,

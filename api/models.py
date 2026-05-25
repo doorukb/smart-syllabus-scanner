@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from demo_extract import SyllabusExtraction, ValidationResult, PolicyFlagResult
 
 class ExtractionResponse(BaseModel):
@@ -7,13 +7,6 @@ class ExtractionResponse(BaseModel):
     validation: ValidationResult
     policy_flags: PolicyFlagResult
 
-
-class TextRequest(BaseModel):
-    text: str = Field(..., description="Raw syllabus text to extract from")
-    export_calendar: bool = Field(
-        default=False,
-        description="If true, include a base64-encoded .ics file in the response",
-    )
 
 class HealthResponse(BaseModel):
     status: str
