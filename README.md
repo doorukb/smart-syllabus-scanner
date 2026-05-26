@@ -34,6 +34,7 @@ Windows
 
 3. Install dependencies
 - pip install -r requirements.txt
+- pip install aiofiles
 
 4. Set up your API key
 - copy .env.example .env (Windows)

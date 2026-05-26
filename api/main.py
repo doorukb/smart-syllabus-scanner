@@ -14,6 +14,8 @@ from demo_extract import (
 )
 from api.chat import answer_question
 from api.models import ChatRequest, ChatResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 load_dotenv()
 
@@ -22,6 +24,12 @@ app = FastAPI(
     description="Extract structured data from course syllabi using Claude.",
     version="0.1.0",
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/app", include_in_schema=False)
+async def serve_ui() -> FileResponse:
+    return FileResponse("static/index.html")
 
 def _get_client() -> Anthropic:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
