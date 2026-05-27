@@ -1,10 +1,11 @@
 from __future__ import annotations
 import base64
 import os
+from pathlib import Path
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from api.models import ExtractionResponse, HealthResponse, InfoResponse
 from demo_extract import (
     ContentBlock,
@@ -13,9 +14,13 @@ from demo_extract import (
     run_analysis,
 )
 from api.chat import answer_question
-from api.models import ChatRequest, ChatResponse
+from api.models import CalendarRequest, ChatRequest, ChatResponse
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(
     title="Syllabus Parser API",
@@ -23,22 +28,35 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/app", include_in_schema=False)
+async def serve_ui() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
+
 def _get_client() -> Anthropic:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set.")
     return Anthropic(api_key=api_key)
 
-@app.get("/", response_model=InfoResponse)
-async def root() -> InfoResponse:
+@app.get("/", include_in_schema=False)
+async def root() -> RedirectResponse:
+    return RedirectResponse(url="/app", status_code=302)
+
+@app.get("/api", response_model=InfoResponse)
+async def api_info() -> InfoResponse:
     return InfoResponse(
         name="Syllabus Parser API",
         description="Extract structured data from course syllabi using Claude.",
         endpoints=[
-            "GET  /             — API info",
-            "GET  /health       — health check",
-            "POST /extract      — extract from text or file upload",
+            "GET  /app            — web UI",
+            "GET  /api            — API info",
+            "GET  /health         — health check",
+            "POST /extract        — extract from text or file upload",
             "POST /extract/calendar — extract and return .ics file",
+            "POST /calendar       — .ics from extracted JSON (no Claude)",
+            "POST /chat           — syllabus Q&A (multi-turn)",
         ],
     )
 
@@ -122,6 +140,20 @@ async def extract_calendar(
 
     return Response(
         content=ics_bytes,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+# generates an .ics file from already-extracted syllabus data, no extra call needed
+@app.post("/calendar")
+async def generate_calendar(request: CalendarRequest) -> Response:
+    cal = build_calendar(
+        request.extraction.important_dates,
+        request.extraction.course_code,
+    )
+    filename = f"{request.extraction.course_code or 'syllabus'}.ics".replace(" ", "_")
+    return Response(
+        content=cal.to_ical(),
         media_type="text/calendar",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

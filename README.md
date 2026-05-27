@@ -69,13 +69,26 @@ Write output directly to a file
 Export important dates to an iCalendar file (confirmation goes to stderr; JSON stays on stdout)
 - python demo_extract.py --file syllabus.txt --export-calendar out.ics
 
-B) REST API
+B) Web UI
 
 Start the server (from the project root)
 - uvicorn api.main:app --reload
 
+Open the app in your browser
+- http://localhost:8000/app  (or http://localhost:8000/ — redirects to the app)
+
+Upload a syllabus file PDF/JPG/PNG/TXT or paste text, click 
+**Extract syllabus**, then review the overview, grading, dates, and policy cards. 
+If you wish, use **Download JSON** or **Download calendar (.ics)** in the Overview card to export results (calendar uses `POST /calendar` with the cached extraction, which doesn't require a separate call). You can export this file into an external calendar app, such as Google Calendar, but make sure your syllabus contains clear dates before doing so.
+Use the chat panel below the results to ask questions; follow-up messages keep full conversation context. Click **Parse another syllabus** to reset and start over.
+
+C) REST API
+
 Interactive API docs (Swagger UI) — test every endpoint in the browser
 - http://localhost:8000/docs
+
+API metadata
+- http://localhost:8000/api
 
 Health check
 - curl http://localhost:8000/health
@@ -89,7 +102,7 @@ POST raw syllabus text
 Download an .ics calendar file
 - curl -X POST http://localhost:8000/extract/calendar -F "file=@syllabus.pdf" -o syllabus.ics
 
-C) Batch Processing
+D) Batch Processing
 
 Process a full folder of syllabi asynchronously
 - python batch_extract.py --folder ./syllabi --output combined.json

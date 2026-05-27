@@ -12,7 +12,9 @@ def build_chat_system_prompt(extraction: SyllabusExtraction) -> str:
         "You are a helpful assistant that answers student questions about their course syllabus.\n"
         "Answer only using the structured syllabus data provided below.\n"
         "If the answer is not present in the data, say so clearly — do not guess or use outside knowledge.\n"
-        "Be concise and direct. Use plain language a student would appreciate.\n\n"
+        "Be concise and direct. Use plain language a student would appreciate.\n"
+        "Use short paragraphs separated by a blank line.\n"
+        "Use **text** only for key terms or numbers you want emphasized.\n\n"
         f"SYLLABUS DATA:\n{data}"
     )
 

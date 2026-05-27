@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Syllabus Scanner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 720px; margin: 0 auto; }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #fff;
+      border: 0.5px solid #e0e0dc;
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888;
+      margin-bottom: 0.75rem;
+    }
+
+    .upload-zone {
+      border: 1.5px dashed #ccc;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      margin-bottom: 0.75rem;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: #555;
+      background: #fafaf8;
+    }
+
+    .upload-zone input { display: none; }
+
+    .upload-icon { font-size: 1.5rem; margin-bottom: 0.5rem; color: #aaa; }
+
+    .upload-label {
+      font-size: 0.875rem;
+      color: #555;
+    }
+
+    .upload-label span {
+      color: #1a1a1a;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .file-types {
+      font-size: 0.75rem;
+      color: #aaa;
+      margin-top: 0.25rem;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      border: 0.5px solid #e0e0dc;
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-size: 0.875rem;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus { border-color: #999; }
+
+    .divider {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #aaa;
+      margin: 0.75rem 0;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.65rem;
+      border-radius: 8px;
+      border: 0.5px solid #ccc;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: #fff;
+      color: #1a1a1a;
+      margin-top: 0.5rem;
+    }
+
+    .download-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn-download {
+      flex: 1;
+      width: auto;
+      background: #1a1a1a;
+      color: #fff;
+      margin-top: 0;
+    }
+
+    .download-hint {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 0.35rem;
+      line-height: 1.4;
+    }
+
+    #status {
+      font-size: 0.8rem;
+      color: #888;
+      text-align: center;
+      margin-top: 0.75rem;
+      min-height: 1.2rem;
+    }
+
+    #status.error { color: #c0392b; }
+
+    /* Results */
+    .pill {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-right: 4px;
+    }
+
+    .pill-low { background: #eaf3de; color: #27500a; }
+    .pill-medium { background: #faeeda; color: #633806; }
+    .pill-high { background: #fcebeb; color: #791f1f; }
+    .pill-ok { background: #e1f5ee; color: #085041; }
+    .pill-warn { background: #faeeda; color: #633806; }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.875rem;
+      padding: 5px 0;
+      border-bottom: 0.5px solid #f0f0ec;
+    }
+
+    .result-row:last-child { border-bottom: none; }
+    .result-label { color: #666; }
+    .result-value { font-weight: 500; text-align: right; }
+
+    .policy-item {
+      font-size: 0.8rem;
+      padding: 6px 0;
+      border-bottom: 0.5px solid #f0f0ec;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .policy-item:last-child { border-bottom: none; }
+    .policy-text { color: #333; flex: 1; line-height: 1.4; }
+
+    /* Chat */
+    .chat-messages {
+      max-height: 360px;
+      overflow-y: auto;
+      margin-bottom: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .msg {
+      max-width: 88%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .msg-user {
+      align-self: flex-end;
+      background: #1a1a1a;
+      color: #fff;
+    }
+
+    .msg-assistant {
+      align-self: flex-start;
+      background: #f0f0ec;
+      color: #1a1a1a;
+    }
+
+    .msg-assistant p { margin: 0 0 0.5em; }
+    .msg-assistant p:last-child { margin-bottom: 0; }
+    .msg-assistant strong { font-weight: 600; }
+
+    .chat-input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .chat-input-row textarea {
+      height: 44px;
+      flex: 1;
+      resize: none;
+    }
+
+    .chat-input-row button {
+      width: auto;
+      padding: 0 1rem;
+    }
+
+    #upload-screen { display: block; }
+    #results-screen { display: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Smart Syllabus Scanner</h1>
+  <p class="subtitle">Upload a syllabus to extract key information and ask questions about it.</p>
+
+  <div id="upload-screen">
+    <div class="card">
+      <div class="card-title">Upload a file</div>
+      <div class="upload-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".txt,.pdf,.jpg,.jpeg,.png">
+        <div class="upload-icon">↑</div>
+        <p class="upload-label">Drop file here or <span>browse</span></p>
+        <p class="file-types">.txt · .pdf · .jpg · .png</p>
+      </div>
+      <div class="divider">or paste text</div>
+      <textarea id="text-input" placeholder="Paste syllabus text here..."></textarea>
+    </div>
+    <button id="extract-btn" onclick="runExtraction()">Extract syllabus</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="results-screen"></div>
+</div>
+
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      setStatus(`File selected: ${e.dataTransfer.files[0].name}`);
+    }
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) setStatus(`File selected: ${fileInput.files[0].name}`);
+  });
+
+  function setStatus(msg, isError = false) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = isError ? 'error' : '';
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatAssistantMessage(text) {
+    const escaped = escapeHtml(text);
+    const withBold = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const chunks = withBold.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    const paragraphs = chunks.length ? chunks : [withBold.trim() || ''];
+    return paragraphs
+      .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  }
+
+  async function readError(res) {
+    let detail = `Server error ${res.status}`;
+    try {
+      const err = await res.json();
+      if (err.detail) {
+        detail = typeof err.detail === 'string'
+          ? err.detail
+          : JSON.stringify(err.detail);
+      }
+    } catch (_) { /* ignore non-JSON bodies */ }
+    return detail;
+  }
+
+  async function runExtraction() {
+    const btn = document.getElementById('extract-btn');
+    const file = fileInput.files[0];
+    const text = document.getElementById('text-input').value.trim();
+
+    if (!file && !text) {
+      setStatus('Please upload a file or paste text.', true);
+      return;
+    }
+
+    btn.disabled = true;
+    setStatus('Extracting — this takes a few seconds...');
+
+    const form = new FormData();
+    if (file) form.append('file', file);
+    else form.append('text', text);
+
+    try {
+      const res = await fetch('/extract', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(await readError(res));
+      const data = await res.json();
+      showResults(data);
+      setStatus('');
+    } catch (err) {
+      setStatus(`Error: ${err.message}`, true);
+      btn.disabled = false;
+    }
+  }
+
+  let currentExtraction = null;
+  let chatHistory = [];
+
+  function showResults(data) {
+    currentExtraction = data.extraction;
+    chatHistory = [];
+
+    const el = document.getElementById('results-screen');
+    el.style.display = 'block';
+    document.getElementById('upload-screen').style.display = 'none';
+
+    el.innerHTML = `
+      ${renderOverview(data.extraction, data.validation)}
+      ${renderGrading(data.extraction.grading_weights)}
+      ${renderDates(data.extraction.important_dates)}
+      ${renderPolicies(data.extraction.policy_bullets, data.policy_flags)}
+      <button class="btn-secondary" onclick="resetUI()">Parse another syllabus</button>
+      ${renderChat()}
+    `;
+
+    enableDownloadButtons();
+
+    document.getElementById('chat-send').addEventListener('click', sendChat);
+    document.getElementById('chat-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+    });
+  }
+
+  function enableDownloadButtons() {
+    document.querySelectorAll('.btn-download').forEach(btn => {
+      btn.disabled = !currentExtraction;
+    });
+  }
+
+  function downloadFilename(base, ext) {
+    const safe = (base || 'syllabus').replace(/[^\w.\-]+/g, '_');
+    return `${safe}.${ext}`;
+  }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadJSON() {
+    if (!currentExtraction) return;
+    const blob = new Blob(
+      [JSON.stringify(currentExtraction, null, 2)],
+      { type: 'application/json' }
+    );
+    triggerDownload(blob, downloadFilename(currentExtraction.course_code, 'json'));
+  }
+
+  async function downloadCalendar() {
+    if (!currentExtraction) return;
+    try {
+      const res = await fetch('/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraction: currentExtraction }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const blob = await res.blob();
+      triggerDownload(blob, downloadFilename(currentExtraction.course_code, 'ics'));
+    } catch (err) {
+      alert(`Could not generate calendar: ${err.message}`);
+    }
+  }
+
+  function renderOverview(extraction, validation) {
+    const sumOk = validation.grading_sums_to_100;
+    const total = Number(validation.grading_total ?? 0);
+    return `
+      <div class="card">
+        <div class="card-title">Overview</div>
+        <div class="result-row">
+          <span class="result-label">Course</span>
+          <span class="result-value">${escapeHtml(extraction.course_code) || '—'}</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Instructor email</span>
+          <span class="result-value">${escapeHtml(extraction.instructor_email) || '—'}</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">Grading total</span>
+          <span class="result-value">
+            <span class="pill ${sumOk ? 'pill-ok' : 'pill-warn'}">
+              ${total}% ${sumOk ? '✓' : '⚠ not 100%'}
+            </span>
+          </span>
+        </div>
+        <div class="download-actions">
+          <button type="button" class="btn-download" onclick="downloadJSON()" disabled>Download JSON</button>
+          <button type="button" class="btn-download" onclick="downloadCalendar()" disabled>Download calendar (.ics)</button>
+        </div>
+        <p class="download-hint">Save the extracted syllabus as a JSON file.</p>
+        <p class="download-hint">To import dates into another calendar app, your syllabus needs listed dates with parseable day values.</p>
+      </div>`;
+  }
+
+  function renderGrading(weights) {
+    if (!weights?.length) return '';
+    const rows = weights.map(w => `
+      <div class="result-row">
+        <span class="result-label">${escapeHtml(w.component)}</span>
+        <span class="result-value">${escapeHtml(w.percent)}%</span>
+      </div>`).join('');
+    return `<div class="card"><div class="card-title">Grading</div>${rows}</div>`;
+  }
+
+  function renderDates(dates) {
+    if (!dates?.length) return '';
+    const rows = dates.map(d => `
+      <div class="result-row">
+        <span class="result-label">${escapeHtml(d.label)}</span>
+        <span class="result-value">${escapeHtml(d.date_iso || d.raw_text) || '—'}</span>
+      </div>`).join('');
+    return `<div class="card"><div class="card-title">Important dates</div>${rows}</div>`;
+  }
+
+  function renderPolicies(bullets, flags) {
+    if (!bullets?.length) return '';
+    const flagMap = {};
+    (flags?.flags ?? []).forEach(f => { flagMap[f.policy] = f; });
+
+    const items = bullets.map(b => {
+      const flag = flagMap[b];
+      const pill = flag
+        ? `<span class="pill pill-${escapeHtml(flag.severity)}" title="${escapeHtml(flag.reason)}">${escapeHtml(flag.severity)}</span>`
+        : '';
+      return `<div class="policy-item">${pill}<span class="policy-text">${escapeHtml(b)}</span></div>`;
+    }).join('');
+
+    return `<div class="card"><div class="card-title">Policies</div>${items}</div>`;
+  }
+
+  function resetUI() {
+    document.getElementById('upload-screen').style.display = 'block';
+    document.getElementById('results-screen').style.display = 'none';
+    document.getElementById('results-screen').innerHTML = '';
+    fileInput.value = '';
+    document.getElementById('text-input').value = '';
+    document.getElementById('extract-btn').disabled = false;
+    dropZone.classList.remove('drag-over');
+    setStatus('');
+    currentExtraction = null;
+    chatHistory = [];
+  }
+
+  function renderChat() {
+    return `
+      <div class="card" id="chat-card">
+        <div class="card-title">Ask a question</div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="msg msg-assistant">
+            Ask me anything related to the syllabus : grading, policies, deadlines...
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" placeholder="e.g. What happens if I submit late?"></textarea>
+          <button id="chat-send">Send</button>
+        </div>
+      </div>`;
+  }
+
+  function appendMessage(role, content) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = `msg msg-${role}`;
+    if (role === 'assistant') {
+      div.innerHTML = formatAssistantMessage(content);
+    } else {
+      div.textContent = content;
+    }
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (!message || !currentExtraction) return;
+
+    input.value = '';
+    appendMessage('user', message);
+
+    const sendBtn = document.getElementById('chat-send');
+    sendBtn.disabled = true;
+
+    try {
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          extraction: currentExtraction,
+          history: chatHistory,
+          message,
+        }),
+      });
+
+      if (!res.ok) throw new Error(await readError(res));
+      const data = await res.json();
+      chatHistory = data.history;
+      appendMessage('assistant', data.answer);
+    } catch (err) {
+      appendMessage('assistant', `Error: ${err.message}`);
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+</script>
+</body>
+</html>
