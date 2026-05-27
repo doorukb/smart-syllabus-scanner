@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Syllabus Parser</title>
+  <title>Smart Syllabus Scanner</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -207,6 +207,10 @@
       color: #1a1a1a;
     }
 
+    .msg-assistant p { margin: 0 0 0.5em; }
+    .msg-assistant p:last-child { margin-bottom: 0; }
+    .msg-assistant strong { font-weight: 600; }
+
     .chat-input-row {
       display: flex;
       gap: 0.5rem;
@@ -229,7 +233,7 @@
 </head>
 <body>
 <div class="container">
-  <h1>Syllabus Parser</h1>
+  <h1>Smart Syllabus Scanner</h1>
   <p class="subtitle">Upload a syllabus to extract key information and ask questions about it.</p>
 
   <div id="upload-screen">
@@ -286,6 +290,16 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function formatAssistantMessage(text) {
+    const escaped = escapeHtml(text);
+    const withBold = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    const chunks = withBold.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    const paragraphs = chunks.length ? chunks : [withBold.trim() || ''];
+    return paragraphs
+      .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+      .join('');
   }
 
   async function readError(res) {
@@ -436,7 +450,7 @@
         <div class="card-title">Ask a question</div>
         <div class="chat-messages" id="chat-messages">
           <div class="msg msg-assistant">
-            Hi! Ask me anything about this syllabus — grading, policies, deadlines, anything.
+            Ask me anything related to the syllabus : grading, policies, deadlines...
           </div>
         </div>
         <div class="chat-input-row">
@@ -450,7 +464,11 @@
     const container = document.getElementById('chat-messages');
     const div = document.createElement('div');
     div.className = `msg msg-${role}`;
-    div.textContent = content;
+    if (role === 'assistant') {
+      div.innerHTML = formatAssistantMessage(content);
+    } else {
+      div.textContent = content;
+    }
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
   }
