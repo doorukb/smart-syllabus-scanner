@@ -18,7 +18,6 @@ venv/
 .venv/
 env/
 ENV/
-api/__init__.py
 
 # ── Tests & coverage ──────────────────────────────────────────────────────────
 .pytest_cache/
