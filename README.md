@@ -6,13 +6,14 @@
 - FastAPI + Uvicorn
 - python-dotenv
 - icalendar
+- Docker (optional)
 
 <br><br>
 
 A document intelligence pipeline that takes a raw PDF, PNG, JPG, or TXT syllabus and extracts structured course data using the Anthropic Claude API, validates it with a second LLM reasoning pass, and exposes the full system as a FastAPI REST microservice with a browser-based UI and a conversational Q&A layer.
 
 Most syllabus information (grading policies, deadlines, instructor contacts) lives in unstructured PDFs that no system can query directly. Smart Syllabus Scanner solves this by turning any syllabus into clean, validated, machine-readable JSON in two LLM passes :
-- Pass 1 - Extraction : The document is routed through Claude via native tool_use, producing a Pydantic-validated JSON object containing the course code, instructor email, grading weights, important dates, and policy statements.
+- Pass 1 - Extraction : The document is routed through Claude via native tool_use, producing a Pydantic-validated JSON object containing the course code, instructor email, grading weights, important dates, policy statements, and letter-grade cutoffs when present.
 - Pass 2 - Reasoning : Two Claude calls run concurrently using asyncio.gather. One checks correctness (do grading weights sum to 100%, are there date conflicts). The other scores each policy for student-friendliness by severity. Both results are returned alongside the extraction.
 
 <br><br>
@@ -44,8 +45,26 @@ Windows
 
 <br><br>
 
-### Usage
+### Docker
 
+If you have Docker installed you can skip the virtual environment and pip steps entirely.
+
+1. Set up your API key (same as step 4 above, required before building)
+- copy .env.example .env (Windows)
+- cp .env.example .env (macOS / Linux)
+- Add your ANTHROPIC_API_KEY to the .env file
+
+2. Build and start the container
+- docker compose up --build
+
+Open the app at http://localhost:8000/app
+
+To stop the container
+- docker compose down
+
+<br><br>
+
+### Usage
 #### A) Web UI
 
 Start the server from the project root
@@ -54,7 +73,7 @@ Start the server from the project root
 Open the app in your browser
 - http://localhost:8000/app
 
-Upload a syllabus file (PDF, JPG, PNG, or TXT) or paste text directly, then click Extract syllabus. The results appear as cards showing the overview, grading breakdown, important dates, and policies with severity ratings.
+Upload a syllabus file (PDF, JPG, PNG, or TXT) or paste text directly, then click Extract syllabus. The results appear as cards showing the overview, grading breakdown, letter-grade scale (when present in the syllabus), important dates, and policies with severity ratings.
 
 From the Overview card you can download the extracted data as a JSON file or as an .ics iCalendar file that can be imported into Google Calendar, Apple Calendar, or Outlook. Note that calendar export only produces events for dates the model could parse to a specific day, syllabi that use relative schedules (Week 8, two weeks before finals) will produce an empty calendar. So make sure your syllabus contains spefic and parse-able dates.
 
@@ -114,6 +133,18 @@ Important Dates:
   Last day to withdraw:    November 1, 2025
   Final Exam:              December 10, 2025
 
+Grade Scale:
+  A:  93% and above
+  A-: 90 - 92%
+  B+: 87 - 89%
+  B:  83 - 86%
+  B-: 80 - 82%
+  C+: 77 - 79%
+  C:  73 - 76%
+  C-: 70 - 72%
+  D:  60 - 69%
+  F:  below 60%
+
 Policies:
 - Late submissions will be penalized 10% per day, up to a maximum of 50%.
 - Attendance is expected at all lectures and recitations.
@@ -144,6 +175,18 @@ Policies:
   "policy_bullets": [
     "Late submissions will be penalized 10% per day, up to a maximum of 50%.",
     "Academic dishonesty will result in a zero and may be referred to the academic integrity office."
+  ],
+  "grade_scale": [
+    { "letter": "A",  "min_percent": 93.0 },
+    { "letter": "A-", "min_percent": 90.0 },
+    { "letter": "B+", "min_percent": 87.0 },
+    { "letter": "B",  "min_percent": 83.0 },
+    { "letter": "B-", "min_percent": 80.0 },
+    { "letter": "C+", "min_percent": 77.0 },
+    { "letter": "C",  "min_percent": 73.0 },
+    { "letter": "C-", "min_percent": 70.0 },
+    { "letter": "D",  "min_percent": 60.0 },
+    { "letter": "F",  "min_percent": null }
   ],
   "validation": {
     "grading_sums_to_100": true,
