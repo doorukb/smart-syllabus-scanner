@@ -35,7 +35,7 @@ Windows
 3. Install dependencies
 - pip install -r requirements.txt
 
-4. Set up your API key : your Anthropic API key is requied.
+4. Set up your API key : your Anthropic API key is required.
 - copy .env.example .env (Windows)
 - cp .env.example .env (macOS / Linux)
 - Open .env and replace the placeholder with your real key
@@ -75,7 +75,7 @@ Open the app in your browser
 
 Upload a syllabus file (PDF, JPG, PNG, or TXT) or paste text directly, then click Extract syllabus. The results appear as cards showing the overview, grading breakdown, letter-grade scale (when present in the syllabus), important dates, and policies with severity ratings.
 
-From the Overview card you can download the extracted data as a JSON file or as an .ics iCalendar file that can be imported into Google Calendar, Apple Calendar, or Outlook. Note that calendar export only produces events for dates the model could parse to a specific day, syllabi that use relative schedules (Week 8, two weeks before finals) will produce an empty calendar. So make sure your syllabus contains spefic and parse-able dates.
+From the Overview card you can download the extracted data as a JSON file or as an .ics iCalendar file that can be imported into Google Calendar, Apple Calendar, or Outlook. Note that calendar export only produces events for dates the model could parse to a specific day, syllabi that use relative schedules (Week 8, two weeks before finals) will produce an empty calendar. So make sure your syllabus contains specific and parse-able dates.
 
 Use the chat panel below the results to ask questions in natural language. Follow-up messages keep full conversation context. Click Parse another syllabus to reset and start over.
 

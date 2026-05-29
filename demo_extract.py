@@ -287,7 +287,7 @@ async def validate_extraction(
         f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
     )
 
-# the third chained call to score each policy bullet for hashness.
+# the third chained call to score each policy bullet for harshness.
 # Anthropic SDK is synchronous, and client.messages.create() is a blocking call.
 # we will use loop.run_in_executor to run the call asynchronously because asyncio is not enough
 # None argument means to use the default thread pool executor.
