@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from api.models import ExtractionResponse, HealthResponse, InfoResponse
-from demo_extract import (
+from src.demo_extract import (
     ContentBlock,
     build_calendar,
     extract_syllabus,

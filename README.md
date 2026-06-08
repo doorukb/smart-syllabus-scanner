@@ -90,26 +90,26 @@ Here's an example conversation in natural language. The agent is aware of the co
 #### B) CLI - Single File
 
 Extract from a PDF
-- python demo_extract.py --file syllabus.pdf
+- python src/demo_extract.py --file syllabus.pdf
 
 Extract from plain text
-- python demo_extract.py --file syllabus.txt
+- python src/demo_extract.py --file syllabus.txt
 
 Pipe from stdin
-- type syllabus.txt | python demo_extract.py (Windows)
-- cat syllabus.txt | python demo_extract.py (macOS / Linux)
+- type syllabus.txt | python src/demo_extract.py (Windows)
+- cat syllabus.txt | python src/demo_extract.py (macOS / Linux)
 
 Debug mode (prints stop reason and model call count to stderr)
-- python demo_extract.py --file syllabus.pdf --debug
+- python src/demo_extract.py --file syllabus.pdf --debug
 
 Limit characters sent for long documents (default: 50,000, no effect on PDF/image)
-- python demo_extract.py --file syllabus.txt --max-chars 20000
+- python src/demo_extract.py --file syllabus.txt --max-chars 20000
 
 Write output directly to a file
-- python demo_extract.py --file syllabus.pdf > output.json
+- python src/demo_extract.py --file syllabus.pdf > output.json
 
 Export important dates to an iCalendar file (confirmation goes to stderr, JSON stays on stdout)
-- python demo_extract.py --file syllabus.txt --export-calendar out.ics
+- python src/demo_extract.py --file syllabus.txt --export-calendar out.ics
 
 ##### Input (TXT/PDF/PNG/JPG) :
 ```

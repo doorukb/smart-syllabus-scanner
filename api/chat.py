@@ -1,7 +1,7 @@
 from __future__ import annotations
 import json
 from anthropic import Anthropic
-from demo_extract import MODEL_ID, MAX_OUTPUT_TOKENS, SyllabusExtraction
+from src.demo_extract import MODEL_ID, MAX_OUTPUT_TOKENS, SyllabusExtraction
 from api.models import ChatMessage
 
 # this will inject the extracted syllabus data as the authoritative source of truth for the conversation
