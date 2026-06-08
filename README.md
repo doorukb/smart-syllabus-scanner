@@ -8,13 +8,15 @@
 - icalendar
 - Docker (optional)
 
-<br><br>
-
 A document intelligence pipeline that takes a raw PDF, PNG, JPG, or TXT syllabus and extracts structured course data using the Anthropic Claude API, validates it with a second LLM reasoning pass, and exposes the full system as a FastAPI REST microservice with a browser-based UI and a conversational Q&A layer.
 
 Most syllabus information (grading policies, deadlines, instructor contacts) lives in unstructured PDFs that no system can query directly. Smart Syllabus Scanner solves this by turning any syllabus into clean, validated, machine-readable JSON in two LLM passes :
-- Pass 1 - Extraction : The document is routed through Claude via native tool_use, producing a Pydantic-validated JSON object containing the course code, instructor email, grading weights, important dates, policy statements, and letter-grade cutoffs when present.
-- Pass 2 - Reasoning : Two Claude calls run concurrently using asyncio.gather. One checks correctness (do grading weights sum to 100%, are there date conflicts). The other scores each policy for student-friendliness by severity. Both results are returned alongside the extraction.
+- Step 1 - Extraction : The document is routed through Claude via native tool_use, producing a Pydantic-validated JSON object containing the course code, instructor email, grading weights, important dates, policy statements, and letter-grade cutoffs when present. Malformed or schema-violating responses trigger automatic retry rather than propagating to Stage 2.
+- Step 2 - Cross Validation (Concurrent) : Two Claude calls run concurrently using asyncio.gather, each evaluating a different quality dimension of the Step 1 output. Running these as parallel, independent passes rather than a single combined call keeps two quality signals separate: structural correctness and semantic quality have different failure modes, and conflating them into one prompt makes each harder to isolate when something goes wrong. Both results are returned alongside the Stage 1 extraction.
+  - Structural validation checks whether grading weights sum to 100%, flags date conflicts (e.g., withdrawal deadline after the final     exam), and surfaces any logical inconsistencies in the extracted data
+  - Semantic quality scoring evaluates each policy statement for severity and potential student impact, returning a structured            severity rating per policy
+
+- Step 3 - Delivery : Validated output reaches three downstream consumers : a FastAPI REST microservice (interactive docs at /docs), a browser-based dashboard, and a multi-turn Q&A layer. The Q&A layer uses the validated JSON as its sole knowledge source, and it is explicitly prohibited from using outside knowledge, which means answer accuracy is directly bounded by the precision of the extraction and validation stages above it.
 
 <br><br>
 
