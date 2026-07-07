@@ -1,6 +1,6 @@
 # Smart Syllabus Scanner
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/doorukb/Syllabus-Parser/actions/workflows/ci.yml/badge.svg)](https://github.com/doorukb/Syllabus-Parser/actions/workflows/ci.yml)
 
 - Python 3.10+
 - Anthropic Claude API (tool_use, multi-turn, async)
@@ -261,3 +261,10 @@ Generate an .ics file from already-extracted JSON (no extra Claude call)
 
 Ask a question about an extracted syllabus (multi-turn, send full history each request)
 - curl -X POST http://localhost:8000/chat -H "Content-Type: application/json" -d '{"extraction": {...}, "history": [], "message": "What happens if I submit late?"}'
+
+### Testing
+
+    pip install -r requirements-dev.txt httpx
+    python -m pytest tests/ -q
+
+The suite exercises the REST surface with the LLM calls monkeypatched, so it runs without an API key.
